@@ -1,6 +1,6 @@
 # homebrew-purl
 
-Homebrew formula for purl. See [github.com/stripe/purl](github.com/stripe/purl).
+Homebrew formula for purl. See [github.com/stripe/purl](https://github.com/stripe/purl).
 
 ## Usage
 
