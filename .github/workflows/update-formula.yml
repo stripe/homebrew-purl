@@ -1,0 +1,82 @@
+name: Update Formula
+
+on:
+  schedule:
+    - cron: '15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Get latest purl release
+        id: latest
+        run: |
+          TAG=$(gh release view --repo stripe/purl --json tagName -q .tagName)
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get current formula version
+        id: current
+        run: |
+          VERSION=$(grep "url '" Formula/purl.rb | sed "s/.*tags\/v\(.*\)\.tar\.gz'/\1/")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Check if update needed
+        id: check
+        run: |
+          if [ "${{ steps.latest.outputs.version }}" = "${{ steps.current.outputs.version }}" ]; then
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check for existing PR
+        if: steps.check.outputs.needed == 'true'
+        id: pr
+        run: |
+          BRANCH="update-purl-${{ steps.latest.outputs.version }}"
+          COUNT=$(gh pr list --head "$BRANCH" --json number -q 'length')
+          echo "exists=$([[ "$COUNT" -gt 0 ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute sha256
+        if: steps.check.outputs.needed == 'true' && steps.pr.outputs.exists == 'false'
+        id: sha
+        run: |
+          curl -sL "https://github.com/stripe/purl/archive/refs/tags/${{ steps.latest.outputs.tag }}.tar.gz" -o source.tar.gz
+          SHA256=$(sha256sum source.tar.gz | awk '{print $1}')
+          echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
+
+      - name: Update formula and open PR
+        if: steps.check.outputs.needed == 'true' && steps.pr.outputs.exists == 'false'
+        run: |
+          BRANCH="update-purl-${{ steps.latest.outputs.version }}"
+          TAG="${{ steps.latest.outputs.tag }}"
+          SHA="${{ steps.sha.outputs.sha256 }}"
+
+          sed -i "s|url '.*'|url 'https://github.com/stripe/purl/archive/refs/tags/${TAG}.tar.gz'|" Formula/purl.rb
+          sed -i "s|sha256 '.*'|sha256 '${SHA}'|" Formula/purl.rb
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add Formula/purl.rb
+          git commit -m "Update purl to ${{ steps.latest.outputs.version }}"
+          git push origin "$BRANCH"
+
+          gh pr create \
+            --title "Update purl to ${{ steps.latest.outputs.version }}" \
+            --body "Automated update from [purl release ${TAG}](https://github.com/stripe/purl/releases/tag/${TAG})."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
