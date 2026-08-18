@@ -2,8 +2,8 @@
 class Purl < Formula
   desc 'A curl-esque CLI for making HTTP requests that require payment.'
   homepage 'https://purl.dev'
-  url 'https://github.com/stripe/purl/archive/refs/tags/v0.2.8.tar.gz'
-  sha256 '3058f9d82c63ee62b6b899903ca103080546252271cc9288fe732b3d24cc0737'
+  url 'https://github.com/stripe/purl/archive/refs/tags/v0.2.9.tar.gz'
+  sha256 '872157e36356f007328f6377106f6e4dc44dad3b770ceb652efd907178ddb9e3'
   license 'MIT'
 
   depends_on 'rust' => :build
